@@ -8,8 +8,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.lang.reflect.Field;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -17,7 +17,6 @@ import static org.mockito.Mockito.*;
 
 /**
  * 秒杀服务单元测试
- * 纯内存测试，不依赖 Redis
  */
 @ExtendWith(MockitoExtension.class)
 class SeckillServiceTest {
@@ -28,18 +27,18 @@ class SeckillServiceTest {
     @Mock
     private OrderMapper orderMapper;
 
+    @Mock
+    private StringRedisTemplate redisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> valueOperations;
+
     @InjectMocks
     private SeckillService seckillService;
 
     @BeforeEach
-    void setUp() throws Exception {
-        // 清理静态内存存储，避免测试间状态污染
-        Field memoryField = SeckillService.class.getDeclaredField("memoryStore");
-        memoryField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        java.util.concurrent.ConcurrentHashMap<String, String> memoryStore =
-            (java.util.concurrent.ConcurrentHashMap<String, String>) memoryField.get(null);
-        memoryStore.clear();
+    void setUp() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
     @Test
@@ -52,14 +51,14 @@ class SeckillServiceTest {
 
     @Test
     void testDoSeckill_Success() {
-        // 模拟库存充足
         when(stockService.deductStock(anyString())).thenReturn(10L);
         when(orderMapper.insert(any(SeckillOrder.class))).thenReturn(1);
+        when(valueOperations.setIfAbsent(anyString(), anyString(), anyLong(), any()))
+            .thenReturn(true);
 
-        // 先获取 path
         String path = seckillService.getSeckillPath(10001L, 1L);
+        when(valueOperations.get(anyString())).thenReturn(path);
 
-        // 执行秒杀
         SeckillService.SeckillResult result = seckillService.doSeckill(10001L, 1L, path);
 
         assertTrue(result.isSuccess());
@@ -71,7 +70,8 @@ class SeckillServiceTest {
 
     @Test
     void testDoSeckill_InvalidPath() {
-        // 使用错误的 path
+        when(valueOperations.get(anyString())).thenReturn(null);
+
         SeckillService.SeckillResult result = seckillService.doSeckill(10001L, 1L, "wrongpath");
 
         assertFalse(result.isSuccess());
@@ -84,25 +84,27 @@ class SeckillServiceTest {
         when(orderMapper.insert(any(SeckillOrder.class))).thenReturn(1);
 
         String path = seckillService.getSeckillPath(10001L, 1L);
+        when(valueOperations.get(anyString())).thenReturn(path);
+        when(valueOperations.setIfAbsent(anyString(), anyString(), anyLong(), any()))
+            .thenReturn(true)
+            .thenReturn(false);
 
-        // 第一次下单成功
         SeckillService.SeckillResult result1 = seckillService.doSeckill(10001L, 1L, path);
         assertTrue(result1.isSuccess());
 
-        // 第二次下单失败（幂等）
-        String path2 = seckillService.getSeckillPath(10001L, 1L);
-        SeckillService.SeckillResult result2 = seckillService.doSeckill(10001L, 1L, path2);
+        SeckillService.SeckillResult result2 = seckillService.doSeckill(10001L, 1L, path);
         assertFalse(result2.isSuccess());
         assertEquals("您已参与过该活动", result2.getMessage());
     }
 
     @Test
     void testDoSeckill_StockEmpty() {
-        // 模拟库存为0
         when(stockService.deductStock(anyString())).thenReturn(0L);
+        when(valueOperations.get(anyString())).thenReturn("abc123");
+        when(valueOperations.setIfAbsent(anyString(), anyString(), anyLong(), any()))
+            .thenReturn(true);
 
-        String path = seckillService.getSeckillPath(10001L, 1L);
-        SeckillService.SeckillResult result = seckillService.doSeckill(10001L, 1L, path);
+        SeckillService.SeckillResult result = seckillService.doSeckill(10001L, 1L, "abc123");
 
         assertFalse(result.isSuccess());
         assertEquals("商品已售罄", result.getMessage());
@@ -110,11 +112,12 @@ class SeckillServiceTest {
 
     @Test
     void testDoSeckill_StockNotInitialized() {
-        // 模拟库存未初始化
         when(stockService.deductStock(anyString())).thenReturn(-1L);
+        when(valueOperations.get(anyString())).thenReturn("abc123");
+        when(valueOperations.setIfAbsent(anyString(), anyString(), anyLong(), any()))
+            .thenReturn(true);
 
-        String path = seckillService.getSeckillPath(10001L, 1L);
-        SeckillService.SeckillResult result = seckillService.doSeckill(10001L, 1L, path);
+        SeckillService.SeckillResult result = seckillService.doSeckill(10001L, 1L, "abc123");
 
         assertFalse(result.isSuccess());
         assertEquals("活动未开始或商品不存在", result.getMessage());
@@ -122,18 +125,17 @@ class SeckillServiceTest {
 
     @Test
     void testDoSeckill_RollbackOnException() {
-        // 模拟扣库存成功，但数据库插入失败
         when(stockService.deductStock(anyString())).thenReturn(10L);
         when(orderMapper.insert(any(SeckillOrder.class)))
             .thenThrow(new RuntimeException("数据库异常"));
+        when(valueOperations.get(anyString())).thenReturn("abc123");
+        when(valueOperations.setIfAbsent(anyString(), anyString(), anyLong(), any()))
+            .thenReturn(true);
 
-        String path = seckillService.getSeckillPath(10001L, 1L);
-        SeckillService.SeckillResult result = seckillService.doSeckill(10001L, 1L, path);
+        SeckillService.SeckillResult result = seckillService.doSeckill(10001L, 1L, "abc123");
 
         assertFalse(result.isSuccess());
         assertEquals("下单失败，请重试", result.getMessage());
-
-        // 验证回滚被调用
         verify(stockService).rollbackStock(anyString());
     }
 }

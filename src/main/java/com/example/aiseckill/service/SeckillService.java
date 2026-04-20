@@ -7,12 +7,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 秒杀服务
+ * 生产环境依赖 Redis 高可用，不提供内存降级
+ */
 @Slf4j
 @Service
 public class SeckillService {
@@ -20,28 +22,11 @@ public class SeckillService {
     @Autowired
     private RedisStockService stockService;
     
-    @Autowired(required = false)
+    @Autowired
     private StringRedisTemplate redisTemplate;
     
     @Autowired
     private OrderMapper orderMapper;
-    
-    // 内存备用（无Redis时用于path和user标记）
-    private static final ConcurrentHashMap<String, String> memoryStore = new ConcurrentHashMap<>();
-    
-    private boolean redisAvailable = false;
-    
-    @PostConstruct
-    public void init() {
-        try {
-            if (redisTemplate != null) {
-                redisTemplate.getConnectionFactory().getConnection().ping();
-                redisAvailable = true;
-            }
-        } catch (Exception e) {
-            redisAvailable = false;
-        }
-    }
     
     private static final String STOCK_KEY_PREFIX = "seckill:stock:";
     private static final String USER_KEY_PREFIX = "seckill:user:";
@@ -50,32 +35,22 @@ public class SeckillService {
     public String getSeckillPath(Long userId, Long goodsId) {
         String path = generatePath();
         String pathKey = PATH_KEY_PREFIX + userId + ":" + goodsId;
-        if (redisAvailable) {
-            redisTemplate.opsForValue().set(pathKey, path, 5, TimeUnit.MINUTES);
-        } else {
-            memoryStore.put(pathKey, path);
-        }
+        redisTemplate.opsForValue().set(pathKey, path, 5, TimeUnit.MINUTES);
         return path;
     }
     
     public SeckillResult doSeckill(Long userId, Long goodsId, String path) {
         String pathKey = PATH_KEY_PREFIX + userId + ":" + goodsId;
-        String expectedPath = redisAvailable ? 
-            redisTemplate.opsForValue().get(pathKey) : 
-            memoryStore.get(pathKey);
+        String expectedPath = redisTemplate.opsForValue().get(pathKey);
         if (expectedPath == null || !expectedPath.equals(path)) {
             return SeckillResult.fail("非法请求或链接已过期");
         }
         
         String userKey = USER_KEY_PREFIX + userId + ":" + goodsId;
-        boolean hasBought;
-        if (redisAvailable) {
-            Boolean result = redisTemplate.opsForValue()
-                .setIfAbsent(userKey, "1", 10, TimeUnit.MINUTES);
-            hasBought = Boolean.FALSE.equals(result);
-        } else {
-            hasBought = memoryStore.putIfAbsent(userKey, "1") != null;
-        }
+        Boolean result = redisTemplate.opsForValue()
+            .setIfAbsent(userKey, "1", 10, TimeUnit.MINUTES);
+        boolean hasBought = Boolean.FALSE.equals(result);
+        
         if (hasBought) {
             return SeckillResult.fail("您已参与过该活动");
         }
@@ -106,13 +81,11 @@ public class SeckillService {
     }
     
     private void clearUserFlag(String userKey) {
-        if (redisAvailable) redisTemplate.delete(userKey);
-        else memoryStore.remove(userKey);
+        redisTemplate.delete(userKey);
     }
     
     private void clearPath(String pathKey) {
-        if (redisAvailable) redisTemplate.delete(pathKey);
-        else memoryStore.remove(pathKey);
+        redisTemplate.delete(pathKey);
     }
     
     private SeckillOrder createOrder(Long userId, Long goodsId) {
@@ -123,7 +96,6 @@ public class SeckillService {
         order.setQuantity(1);
         order.setStatus(0);
         order.setCreateTime(LocalDateTime.now());
-        // 写入数据库
         orderMapper.insert(order);
         return order;
     }

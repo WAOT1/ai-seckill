@@ -8,43 +8,34 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import java.util.Collections;
-import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Redis 库存服务
+ * 生产环境要求 Redis 高可用（Cluster + Sentinel），不提供内存降级
+ */
 @Slf4j
 @Service
 public class RedisStockService {
     
-    @Autowired(required = false)
+    @Autowired
     private StringRedisTemplate redisTemplate;
-    
-    // 内存备用（无Redis时使用）
-    private static final ConcurrentHashMap<String, String> memoryStore = new ConcurrentHashMap<>();
-    
-    private boolean redisAvailable = false;
     
     @PostConstruct
     public void init() {
         try {
-            if (redisTemplate != null) {
-                redisTemplate.getConnectionFactory().getConnection().ping();
-                redisAvailable = true;
-                log.info("Redis连接成功，使用Redis模式");
-            }
+            redisTemplate.getConnectionFactory().getConnection().ping();
+            log.info("Redis连接成功");
         } catch (Exception e) {
-            redisAvailable = false;
-            log.warn("Redis不可用，使用内存模式: {}", e.getMessage());
+            log.error("Redis连接失败: {}。生产环境请确保 Redis Cluster + Sentinel 高可用", e.getMessage());
+            throw new IllegalStateException("Redis 不可用，系统无法启动。请检查 Redis 配置或启动 Redis 服务。", e);
         }
     }
     
+    /**
+     * 扣减库存（Lua 原子操作）
+     * @return 扣减后的库存（>0），库存为0（0），未初始化（-1）
+     */
     public Long deductStock(String stockKey) {
-        if (redisAvailable) {
-            return deductFromRedis(stockKey);
-        } else {
-            return deductFromMemory(stockKey);
-        }
-    }
-    
-    private Long deductFromRedis(String stockKey) {
         String script = 
             "local stock = redis.call('get', KEYS[1]); " +
             "if stock == false then return -1; end; " +
@@ -58,41 +49,25 @@ public class RedisStockService {
         return redisTemplate.execute(stockScript, Collections.singletonList(stockKey));
     }
     
-    private synchronized Long deductFromMemory(String stockKey) {
-        String stock = memoryStore.get(stockKey);
-        if (stock == null) return -1L;
-        int num = Integer.parseInt(stock);
-        if (num <= 0) return 0L;
-        memoryStore.put(stockKey, String.valueOf(num - 1));
-        return (long) num;
-    }
-    
+    /**
+     * 初始化库存
+     */
     public void initStock(String stockKey, int stock) {
-        if (redisAvailable) {
-            redisTemplate.opsForValue().set(stockKey, String.valueOf(stock));
-        } else {
-            memoryStore.put(stockKey, String.valueOf(stock));
-        }
+        redisTemplate.opsForValue().set(stockKey, String.valueOf(stock));
     }
     
+    /**
+     * 回滚库存（下单失败时调用）
+     */
     public void rollbackStock(String stockKey) {
-        if (redisAvailable) {
-            redisTemplate.opsForValue().increment(stockKey);
-        } else {
-            String stock = memoryStore.get(stockKey);
-            if (stock != null) {
-                memoryStore.put(stockKey, String.valueOf(Integer.parseInt(stock) + 1));
-            }
-        }
+        redisTemplate.opsForValue().increment(stockKey);
     }
     
+    /**
+     * 查询库存
+     */
     public Long getStock(String stockKey) {
-        String stock;
-        if (redisAvailable) {
-            stock = redisTemplate.opsForValue().get(stockKey);
-        } else {
-            stock = memoryStore.get(stockKey);
-        }
+        String stock = redisTemplate.opsForValue().get(stockKey);
         return stock == null ? -1L : Long.parseLong(stock);
     }
 }

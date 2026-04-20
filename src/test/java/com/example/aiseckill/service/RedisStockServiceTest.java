@@ -1,6 +1,5 @@
 package com.example.aiseckill.service;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -10,15 +9,13 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
-import java.lang.reflect.Field;
-import java.util.Collections;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
  * Redis 库存服务单元测试
+ * 生产环境要求 Redis 高可用，测试仅覆盖 Redis 模式
  */
 @ExtendWith(MockitoExtension.class)
 class RedisStockServiceTest {
@@ -31,14 +28,6 @@ class RedisStockServiceTest {
 
     @InjectMocks
     private RedisStockService stockService;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        // 通过反射设置 redisAvailable = true，测试 Redis 分支
-        Field field = RedisStockService.class.getDeclaredField("redisAvailable");
-        field.setAccessible(true);
-        field.set(stockService, true);
-    }
 
     @Test
     void testDeductStock_Success() {
@@ -106,40 +95,5 @@ class RedisStockServiceTest {
         Long stock = stockService.getStock("stock:1");
 
         assertEquals(-1L, stock);
-    }
-
-    @Test
-    void testMemoryMode_DeductStock() throws Exception {
-        // 切换到内存模式
-        Field field = RedisStockService.class.getDeclaredField("redisAvailable");
-        field.setAccessible(true);
-        field.set(stockService, false);
-
-        // 清理内存存储
-        Field memoryField = RedisStockService.class.getDeclaredField("memoryStore");
-        memoryField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        java.util.concurrent.ConcurrentHashMap<String, String> memoryStore =
-            (java.util.concurrent.ConcurrentHashMap<String, String>) memoryField.get(null);
-        memoryStore.clear();
-
-        // 初始化库存
-        stockService.initStock("stock:2", 5);
-
-        // 扣减库存
-        Long result1 = stockService.deductStock("stock:2");
-        assertEquals(5L, result1);
-
-        Long result2 = stockService.deductStock("stock:2");
-        assertEquals(4L, result2);
-
-        // 库存耗尽
-        stockService.initStock("stock:3", 0);
-        Long result3 = stockService.deductStock("stock:3");
-        assertEquals(0L, result3);
-
-        // 未初始化
-        Long result4 = stockService.deductStock("stock:999");
-        assertEquals(-1L, result4);
     }
 }
