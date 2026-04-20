@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能秒杀助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            text-align: center;
+            color: white;
+            padding: 40px;
+        }
+        h1 { font-size: 48px; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .subtitle { font-size: 20px; margin-bottom: 50px; opacity: 0.9; }
+        .cards {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .card {
+            background: rgba(255,255,255,0.95);
+            color: #333;
+            padding: 40px 30px;
+            border-radius: 20px;
+            width: 280px;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+            text-decoration: none;
+        }
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .card-icon { font-size: 60px; margin-bottom: 20px; }
+        .card h2 { font-size: 24px; margin-bottom: 10px; color: #667eea; }
+        .card p { font-size: 14px; color: #666; line-height: 1.6; }
+        .features {
+            margin-top: 50px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .feature {
+            background: rgba(255,255,255,0.2);
+            padding: 15px 25px;
+            border-radius: 30px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 AI 智能秒杀助手</h1>
+        <p class="subtitle">基于 Spring Boot + DeepSeek AI 的高并发秒杀系统</p>
+        
+        <div class="cards">
+            <a href="seckill.html" class="card">
+                <div class="card-icon">⚡</div>
+                <h2>秒杀系统</h2>
+                <p>Redis 原子扣库存<br>高并发秒杀下单<br>库存实时查询</p>
+            </a>
+            
+            <a href="ai-chat.html" class="card">
+                <div class="card-icon">🤖</div>
+                <h2>AI 智能客服</h2>
+                <p>DeepSeek Function Calling<br>智能问答与预测<br>实时库存查询</p>
+            </a>
+        </div>
+        
+        <div class="features">
+            <div class="feature">✅ Redis + Lua 原子扣减</div>
+            <div class="feature">✅ AI Function Calling</div>
+            <div class="feature">✅ 滑动窗口限流</div>
+            <div class="feature">✅ 订单持久化</div>
+        </div>
+    </div>
+</body>
+</html>

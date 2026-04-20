@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能客服 - AI 智能秒杀助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; }
+        .back { position: absolute; left: 20px; top: 20px; color: white; text-decoration: none; font-size: 16px; }
+        .container { max-width: 900px; margin: 30px auto; padding: 0 20px; display: flex; gap: 20px; }
+        .chat-panel {
+            flex: 1;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            height: 70vh;
+        }
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .chat-header .avatar {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+        }
+        .chat-header h3 { color: #333; }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .message.user { flex-direction: row-reverse; }
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .message.ai .message-bubble {
+            background: #f0f0f0;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .message-avatar {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .message.ai .message-avatar { background: #e8e8e8; }
+        .message.user .message-avatar { background: #667eea; color: white; }
+        .function-call {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #0c5460;
+        }
+        .function-call code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .chat-input {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+        }
+        .chat-input input:focus { border-color: #667eea; }
+        .chat-input button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: transform 0.2s;
+        }
+        .chat-input button:hover { transform: scale(1.05); }
+        .chat-input button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .side-panel {
+            width: 280px;
+        }
+        .panel-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .panel-card h3 { color: #333; margin-bottom: 15px; font-size: 16px; }
+        .quick-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 8px;
+            border: 1px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .quick-btn:hover { background: #f0f0f0; border-color: #667eea; }
+        .typing {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+        }
+        .typing span {
+            width: 8px; height: 8px;
+            background: #999;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .side-panel { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="index.html" class="back">← 返回首页</a>
+        <h1>🤖 AI 智能客服</h1>
+    </div>
+    
+    <div class="container">
+        <div class="chat-panel">
+            <div class="chat-header">
+                <div class="avatar">🤖</div>
+                <div>
+                    <h3>DeepSeek AI 助手</h3>
+                    <p style="font-size: 12px; color: #666;">支持 Function Calling，可查询真实数据</p>
+                </div>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message ai">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-bubble">
+                        你好！我是 AI 智能客服。我可以帮你：<br>
+                        • 查询商品库存<br>
+                        • 预测下次补货时间<br>
+                        • 分析用户行为风险<br>
+                        请问有什么可以帮你的？
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input">
+                <input type="text" id="userInput" placeholder="输入你的问题..." onkeypress="if(event.key==='Enter')sendMessage()">
+                <button id="sendBtn" onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+        
+        <div class="side-panel">
+            <div class="panel-card">
+                <h3>💡 快速提问</h3>
+                <button class="quick-btn" onclick="quickAsk('1号商品还有吗？')">1号商品还有吗？</button>
+                <button class="quick-btn" onclick="quickAsk('什么时候补货？')">什么时候补货？</button>
+                <button class="quick-btn" onclick="quickAsk('查询库存')">查询库存</button>
+                <button class="quick-btn" onclick="quickAsk('帮我分析一下这个用户是否有风险')">分析用户风险</button>
+            </div>
+            
+            <div class="panel-card">
+                <h3>⚙️ 功能说明</h3>
+                <p style="font-size: 13px; color: #666; line-height: 1.8;">
+                    <b>Function Calling：</b><br>
+                    AI 会自动识别需要调用系统函数的场景，并返回真实数据。<br><br>
+                    <b>支持的函数：</b><br>
+                    • query_stock - 查询库存<br>
+                    • predict_restock - 预测补货<br>
+                    • check_risk - 风险检查
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+        const messagesDiv = document.getElementById('chatMessages');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        function addMessage(role, content, functionCall) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+            
+            let functionHtml = '';
+            if (functionCall) {
+                functionHtml = `
+                    <div class="function-call">
+                        🔧 <b>Function Call:</b> ${functionCall.name}<br>
+                        参数: <code>${JSON.stringify(functionCall.arguments)}</code><br>
+                        结果: <code>${JSON.stringify(functionCall.result)}</code>
+                    </div>
+                `;
+            }
+            
+            msgDiv.innerHTML = `
+                <div class="message-avatar">${role === 'ai' ? '🤖' : '👤'}</div>
+                <div class="message-bubble">${content}${functionHtml}</div>
+            `;
+            
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function showTyping() {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message ai typing-indicator';
+            typingDiv.innerHTML = `
+                <div class="message-avatar">🤖</div>
+                <div class="message-bubble">
+                    <div class="typing">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            `;
+            typingDiv.id = 'typingIndicator';
+            messagesDiv.appendChild(typingDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function hideTyping() {
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) indicator.remove();
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+            
+            userInput.value = '';
+            addMessage('user', text);
+            
+            sendBtn.disabled = true;
+            showTyping();
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/ai/assistant?q=${encodeURIComponent(text)}`);
+                const data = await res.json();
+                
+                hideTyping();
+                
+                if (data.code === 200) {
+                    // 尝试解析 function call 信息
+                    let functionCall = null;
+                    if (data.data && data.data.functionCall) {
+                        functionCall = data.data.functionCall;
+                    }
+                    addMessage('ai', data.data.answer || data.data, functionCall);
+                } else {
+                    addMessage('ai', `抱歉，请求失败: ${data.message}`);
+                }
+            } catch (e) {
+                hideTyping();
+                addMessage('ai', `抱歉，服务暂时不可用: ${e.message}`);
+            }
+            
+            sendBtn.disabled = false;
+        }
+
+        function quickAsk(text) {
+            userInput.value = text;
+            sendMessage();
+        }
+
+        // 普通对话接口（备用）
+        async function sendChatMessage(text) {
+            const res = await fetch(`${API_BASE}/api/ai/chat?q=${encodeURIComponent(text)}`);
+            const data = await res.json();
+            return data.data || data.message || '无响应';
+        }
+    </script>
+</body>
+</html>

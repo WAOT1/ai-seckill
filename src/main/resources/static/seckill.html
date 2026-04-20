@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>秒杀系统 - AI 智能秒杀助手</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; }
+        .back { position: absolute; left: 20px; top: 20px; color: white; text-decoration: none; font-size: 16px; }
+        .container { max-width: 800px; margin: 30px auto; padding: 0 20px; }
+        .panel {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .panel h2 { color: #333; margin-bottom: 20px; font-size: 20px; }
+        .goods-card {
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+        .goods-img { font-size: 80px; margin-right: 30px; }
+        .goods-info h3 { font-size: 24px; margin-bottom: 10px; }
+        .goods-info p { opacity: 0.9; font-size: 14px; }
+        .stock { font-size: 36px; font-weight: bold; margin-top: 10px; }
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 15px;
+        }
+        .btn:hover { background: #5a67d8; transform: scale(1.05); }
+        .btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; color: #666; font-size: 14px; }
+        .input-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        .input-group input:focus { outline: none; border-color: #667eea; }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 12px;
+            display: none;
+        }
+        .result.success { background: #d4edda; color: #155724; display: block; }
+        .result.error { background: #f8d7da; color: #721c24; display: block; }
+        .result h3 { margin-bottom: 10px; }
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-line { margin-bottom: 5px; }
+        .log-time { color: #858585; }
+        .init-section {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .init-section .input-group { flex: 1; margin-bottom: 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="index.html" class="back">← 返回首页</a>
+        <h1>⚡ 秒杀系统</h1>
+    </div>
+    
+    <div class="container">
+        <div class="panel">
+            <h2>📝 初始化库存</h2>
+            <div class="init-section">
+                <div class="input-group">
+                    <label>商品 ID</label>
+                    <input type="number" id="goodsId" value="1" placeholder="输入商品ID">
+                </div>
+                <div class="input-group">
+                    <label>库存数量</label>
+                    <input type="number" id="stockNum" value="100" placeholder="输入库存数量">
+                </div>
+                <button class="btn" onclick="initStock()" style="margin-top:0;">初始化</button>
+            </div>
+        </div>
+
+        <div class="goods-card">
+            <div class="goods-img">👟</div>
+            <div class="goods-info">
+                <h3>限量款运动鞋</h3>
+                <p>商品 ID: <span id="displayGoodsId">1</span></p>
+                <div class="stock">库存: <span id="stockDisplay">?</span></div>
+                <button class="btn" id="seckillBtn" onclick="startSeckill()">立即秒杀</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>👤 用户信息</h2>
+            <div class="input-group">
+                <label>用户 ID</label>
+                <input type="number" id="userId" value="10001" placeholder="输入用户ID">
+            </div>
+        </div>
+
+        <div id="result" class="result"></div>
+
+        <div class="panel">
+            <h2>📋 操作日志</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+        let currentPath = '';
+
+        function log(msg) {
+            const time = new Date().toLocaleTimeString();
+            document.getElementById('log').innerHTML += 
+                `<div class="log-line"><span class="log-time">[${time}]</span> ${msg}</div>`;
+        }
+
+        async function initStock() {
+            const goodsId = document.getElementById('goodsId').value;
+            const stock = document.getElementById('stockNum').value;
+            
+            log(`正在初始化商品 ${goodsId} 的库存为 ${stock}...`);
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/goods/${goodsId}/init?stock=${stock}`, {
+                    method: 'POST'
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    log(`✅ 库存初始化成功`);
+                    document.getElementById('displayGoodsId').textContent = goodsId;
+                    queryStock();
+                } else {
+                    log(`❌ 初始化失败: ${data.message}`);
+                }
+            } catch (e) {
+                log(`❌ 请求失败: ${e.message}`);
+            }
+        }
+
+        async function queryStock() {
+            const goodsId = document.getElementById('goodsId').value;
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/goods/${goodsId}/stock`);
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    document.getElementById('stockDisplay').textContent = data.data.stock;
+                }
+            } catch (e) {
+                log(`❌ 查询库存失败: ${e.message}`);
+            }
+        }
+
+        async function startSeckill() {
+            const goodsId = document.getElementById('goodsId').value;
+            const userId = document.getElementById('userId').value;
+            const btn = document.getElementById('seckillBtn');
+            const result = document.getElementById('result');
+            
+            btn.disabled = true;
+            btn.textContent = '处理中...';
+            result.className = 'result';
+            
+            log(`用户 ${userId} 开始秒杀商品 ${goodsId}...`);
+            
+            try {
+                // 1. 获取秒杀路径
+                log('正在获取秒杀路径...');
+                const pathRes = await fetch(`${API_BASE}/api/seckill/${goodsId}/path?userId=${userId}`);
+                const pathData = await pathRes.json();
+                
+                if (pathData.code !== 200) {
+                    throw new Error(pathData.message);
+                }
+                
+                const path = pathData.data.path;
+                log(`✅ 获取路径成功: ${path}`);
+                
+                // 2. 下单
+                log('正在提交订单...');
+                const orderRes = await fetch(`${API_BASE}/api/seckill/${goodsId}/order`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: parseInt(userId), path })
+                });
+                const orderData = await orderRes.json();
+                
+                if (orderData.code === 200) {
+                    result.className = 'result success';
+                    result.innerHTML = `
+                        <h3>🎉 秒杀成功！</h3>
+                        <p>订单号: ${orderData.data.orderNo}</p>
+                        <p>状态: ${orderData.data.status === 0 ? '待支付' : '已完成'}</p>
+                    `;
+                    log(`✅ 秒杀成功！订单号: ${orderData.data.orderNo}`);
+                } else {
+                    result.className = 'result error';
+                    result.innerHTML = `<h3>❌ 秒杀失败</h3><p>${orderData.message}</p>`;
+                    log(`❌ 秒杀失败: ${orderData.message}`);
+                }
+                
+                queryStock();
+                
+            } catch (e) {
+                result.className = 'result error';
+                result.innerHTML = `<h3>❌ 错误</h3><p>${e.message}</p>`;
+                log(`❌ 错误: ${e.message}`);
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '立即秒杀';
+        }
+
+        // 页面加载时查询库存
+        queryStock();
+        log('页面已加载，等待操作...');
+    </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+server:
+  port: 8080
+
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+  datasource:
+    url: jdbc:mysql://localhost:3306/seckill?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 1234
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+    banner: false
+  # 禁用 DDL 自动执行，避免与 Spring Boot 3.2.x 兼容性问题
+  check-config-location: false
+
+deepseek:
+  api-key: sk-36e8b44e213e4fe6be28feb14740d9c0
+  base-url: https://api.deepseek.com
