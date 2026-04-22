@@ -45,6 +45,37 @@ public class FunctionSchemaConfig {
                     "goodsId", createProperty("integer", "商品ID")
                 ),
                 List.of("userId", "goodsId")
+            )),
+            
+            // 4. 查询订单
+            new Tool(createFunction(
+                "query_order",
+                "查询订单状态和详情",
+                Map.of(
+                    "orderNo", createProperty("integer", "订单号")
+                ),
+                List.of("orderNo")
+            )),
+            
+            // 5. 查询物流
+            new Tool(createFunction(
+                "query_logistics",
+                "查询订单物流信息",
+                Map.of(
+                    "orderNo", createProperty("integer", "订单号")
+                ),
+                List.of("orderNo")
+            )),
+            
+            // 6. 创建订单
+            new Tool(createFunction(
+                "create_order",
+                "创建新订单",
+                Map.of(
+                    "userId", createProperty("integer", "用户ID"),
+                    "goodsId", createProperty("integer", "商品ID")
+                ),
+                List.of("userId", "goodsId")
             ))
         );
     }

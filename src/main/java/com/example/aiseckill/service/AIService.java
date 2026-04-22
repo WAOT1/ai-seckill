@@ -2,15 +2,13 @@ package com.example.aiseckill.service;
 
 import com.example.aiseckill.domain.dto.DeepSeekFunctionRequest;
 import com.example.aiseckill.domain.dto.DeepSeekFunctionResponse;
-import com.example.aiseckill.domain.dto.DeepSeekRequest;
-import com.example.aiseckill.domain.dto.DeepSeekResponse;
+import com.example.aiseckill.gateway.LLMGateway;
+import com.example.aiseckill.gateway.LLMGatewayException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,20 +17,16 @@ import java.util.Map;
 @Slf4j
 @Service
 public class AIService {
-    
-    @Value("${deepseek.api-key}")
-    private String apiKey;
-    
+
+    @Autowired
+    private LLMGateway llmGateway;
+
     @Autowired
     private ToolExecutorService toolExecutor;
-    
+
     @Autowired
     private List<DeepSeekFunctionRequest.Tool> seckillTools;
-    
-    private final WebClient webClient = WebClient.builder()
-        .baseUrl("https://api.deepseek.com")
-        .build();
-    
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     /**
@@ -44,13 +38,20 @@ public class AIService {
     
     /**
      * 智能客服（带 Function Calling）
-     * AI 可以调用系统函数获取真实数据
+     * AI Agent可以调用系统函数获取真实数据，自主决策完成任务
      */
     public String chatWithTools(String question) {
         // 第 1 步：发送请求，带上可用函数
         List<DeepSeekFunctionRequest.Message> messages = new ArrayList<>();
         messages.add(new DeepSeekFunctionRequest.Message("system", 
-            "你是智能秒杀助手。当用户询问库存、商品信息时，你必须调用提供的函数获取真实数据，不要编造。"));
+            "你是智能电商Agent，具备自主决策和工具调用能力。\n" +
+            "执行规则:\n" +
+            "1. 分析用户需求，确定需要调用的工具\n" +
+            "2. 每次只能调用一个工具\n" +
+            "3. 根据工具返回结果，决定下一步行动\n" +
+            "4. 当获取足够信息后，生成最终回答\n" +
+            "5. 如果无法完成任务，说明原因\n" +
+            "6. 不要编造数据，必须调用工具获取真实信息"));
         messages.add(new DeepSeekFunctionRequest.Message("user", question));
         
         DeepSeekFunctionResponse response = callWithTools(messages);
@@ -112,18 +113,8 @@ public class AIService {
     
     private DeepSeekFunctionResponse callWithTools(List<DeepSeekFunctionRequest.Message> messages) {
         try {
-            DeepSeekFunctionRequest request = new DeepSeekFunctionRequest();
-            request.setMessages(messages);
-            request.setTools(seckillTools);
-            
-            return webClient.post()
-                .uri("/chat/completions")
-                .header("Authorization", "Bearer " + apiKey)
-                .bodyValue(request)
-                .retrieve()
-                .bodyToMono(DeepSeekFunctionResponse.class)
-                .block();
-        } catch (Exception e) {
+            return llmGateway.chatWithTools(messages, seckillTools);
+        } catch (LLMGatewayException e) {
             log.error("Function Calling 调用失败", e);
             return null;
         }
@@ -157,26 +148,10 @@ public class AIService {
     }
     
     private String callDeepSeek(String systemPrompt, String userPrompt) {
-        DeepSeekRequest request = new DeepSeekRequest();
-        request.setMessages(List.of(
-            new DeepSeekRequest.Message("system", systemPrompt),
-            new DeepSeekRequest.Message("user", userPrompt)
-        ));
-        
         try {
-            DeepSeekResponse response = webClient.post()
-                .uri("/chat/completions")
-                .header("Authorization", "Bearer " + apiKey)
-                .bodyValue(request)
-                .retrieve()
-                .bodyToMono(DeepSeekResponse.class)
-                .block();
-            
-            if (response != null && response.getChoices() != null && !response.getChoices().isEmpty()) {
-                return response.getChoices().get(0).getMessage().getContent();
-            }
-            return "AI暂时无法回答";
-        } catch (Exception e) {
+            String result = llmGateway.chat(systemPrompt, userPrompt);
+            return result != null ? result : "AI暂时无法回答";
+        } catch (LLMGatewayException e) {
             log.error("调用DeepSeek失败", e);
             return "服务暂时不可用: " + e.getMessage();
         }
